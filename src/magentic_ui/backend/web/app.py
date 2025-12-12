@@ -23,6 +23,7 @@ from .routes import (
     validation,
     ws,
     mcp,
+    users,
 )
 
 # Initialize application
@@ -164,6 +165,13 @@ api.include_router(
     mcp.router,
     prefix="/mcp",
     tags=["mcp"],
+)
+
+api.include_router(
+    users.router,
+    prefix="/users",
+    tags=["users"],
+    responses={404: {"description": "Not found"}},
 )
 
 

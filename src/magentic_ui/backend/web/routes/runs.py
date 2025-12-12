@@ -112,6 +112,7 @@ async def upload_files(
         inside_docker=ws_manager.inside_docker,
         config=ws_manager.config,
         run_without_docker=ws_manager.run_without_docker,
+        user_id=run.user_id,
     )
 
     # Prepare run paths (this creates the directories)
@@ -148,10 +149,15 @@ async def upload_files(
         )
 
     # Notify the team manager about the uploaded files so they don't get marked as generated
-    if hasattr(ws_manager, "_team_managers") and run_id in ws_manager._team_managers:
-        team_manager = ws_manager._team_managers[run_id]
-        uploaded_file_names = {file["name"] for file in uploaded_files}
-        team_manager.add_uploaded_files(uploaded_file_names)
+    uploaded_file_names = {file["name"] for file in uploaded_files}
+    if hasattr(ws_manager, "_team_managers") and run.user_id:
+        team_manager = ws_manager._team_managers.get(run.user_id)
+        if team_manager:
+            team_manager.add_uploaded_files(uploaded_file_names)
+        else:
+            logger.warning(
+                f"Team manager not found for user {run.user_id}, files uploaded but not tracked"
+            )
     else:
         logger.warning(
             f"Team manager not found for run {run_id}, files uploaded but not tracked"

@@ -8,7 +8,7 @@ from sqlalchemy import exc, inspect, text, event
 from sqlalchemy.pool import StaticPool
 from sqlmodel import Session, SQLModel, and_, create_engine, select
 
-from ..datamodel import DatabaseModel, Response, Team
+from ..datamodel import DatabaseModel, Response, Team, User
 from ..teammanager import TeamManager
 from .schema_manager import SchemaManager
 
@@ -100,6 +100,14 @@ class DatabaseManager:
         """
         needs_upgrade, _ = self.schema_manager.check_schema_status()
         return needs_upgrade
+
+    @staticmethod
+    def _ensure_user_exists(session: Session, user_id: str | None) -> None:
+        if user_id is None:
+            return
+        existing_user = session.get(User, user_id)
+        if not existing_user:
+            session.add(User(id=user_id))
 
     def initialize_database(
         self, auto_upgrade: bool = False, force_init_alembic: bool = True
@@ -226,6 +234,9 @@ class DatabaseManager:
                 existing_model = session.exec(
                     select(model_class).where(model_class.id == model.id)
                 ).first()
+                # Ensure referenced user exists to satisfy foreign key constraints
+                if hasattr(model, "user_id"):
+                    self._ensure_user_exists(session, getattr(model, "user_id", None))
                 if existing_model:
                     model.updated_at = datetime.now()
                     for key, value in model.model_dump().items():

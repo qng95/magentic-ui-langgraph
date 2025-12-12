@@ -7,6 +7,7 @@ from .db import (
     Session,
     Settings,
     Team,
+    User,
     DatabaseModel,
 )
 
@@ -30,6 +31,7 @@ __all__ = [
     "RunStatus",
     "Session",
     "Team",
+    "User",
     "Message",
     "MessageConfig",
     "MessageMeta",
