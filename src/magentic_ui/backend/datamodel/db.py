@@ -6,7 +6,7 @@ from typing import Any, List, Optional, Union
 
 from autogen_core import ComponentModel
 from pydantic import field_serializer
-from sqlalchemy import ForeignKey, Integer
+from sqlalchemy import ForeignKey, Integer, String
 from sqlmodel import JSON, Column, DateTime, Field, SQLModel, func
 
 from .types import (
@@ -20,6 +20,27 @@ from .types import (
 )
 
 
+class User(SQLModel, table=True):
+    __table_args__ = {"sqlite_autoincrement": True}
+    id: str = Field(primary_key=True)
+    created_at: datetime = Field(
+        sa_column=Column(DateTime(timezone=True), server_default=func.now()),
+    )  # pylint: disable=not-callable
+    updated_at: datetime = Field(
+        default_factory=datetime.now,
+        sa_column=Column(DateTime(timezone=True), onupdate=func.now()),
+    )  # pylint: disable=not-callable
+    email: Optional[str] = Field(default=None, sa_column=Column(String))
+    docker_container_id: Optional[str] = Field(default=None, sa_column=Column(String))
+    vnc_container_id: Optional[str] = Field(default=None, sa_column=Column(String))
+
+    @field_serializer("created_at", "updated_at")
+    def serialize_datetime(cls, value: datetime) -> str:
+        if isinstance(value, datetime):
+            return value.isoformat()
+        return value
+
+
 class Team(SQLModel, table=True):
     __table_args__ = {"sqlite_autoincrement": True}
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -30,7 +51,10 @@ class Team(SQLModel, table=True):
         default_factory=datetime.now,
         sa_column=Column(DateTime(timezone=True), onupdate=func.now()),
     )  # pylint: disable=not-callable
-    user_id: Optional[str] = None
+    user_id: Optional[str] = Field(
+        default=None,
+        sa_column=Column(String, ForeignKey("user.id", ondelete="CASCADE")),
+    )
     version: Optional[str] = "0.0.1"
     component: Union[ComponentModel, dict[str, Any]] = Field(sa_column=Column(JSON))
 
@@ -45,7 +69,10 @@ class Message(SQLModel, table=True):
         default_factory=datetime.now,
         sa_column=Column(DateTime(timezone=True), onupdate=func.now()),
     )  # pylint: disable=not-callable
-    user_id: Optional[str] = None
+    user_id: Optional[str] = Field(
+        default=None,
+        sa_column=Column(String, ForeignKey("user.id", ondelete="CASCADE")),
+    )
     version: Optional[str] = "0.0.1"
     config: Union[MessageConfig, dict[str, Any]] = Field(
         default_factory=lambda: MessageConfig(source="", content=""),
@@ -74,7 +101,10 @@ class Session(SQLModel, table=True):
         default_factory=datetime.now,
         sa_column=Column(DateTime(timezone=True), onupdate=func.now()),
     )  # pylint: disable=not-callable
-    user_id: Optional[str] = None
+    user_id: Optional[str] = Field(
+        default=None,
+        sa_column=Column(String, ForeignKey("user.id", ondelete="CASCADE")),
+    )
     version: Optional[str] = "0.0.1"
     team_id: Optional[int] = Field(
         default=None,
@@ -139,7 +169,10 @@ class Run(SQLModel, table=True):
         default_factory=list, sa_column=Column(JSON)
     )
 
-    user_id: Optional[str] = None
+    user_id: Optional[str] = Field(
+        default=None,
+        sa_column=Column(String, ForeignKey("user.id", ondelete="CASCADE")),
+    )
     state: Optional[str] = None
 
     input_request: Optional[dict[str, Any]] = Field(
@@ -162,7 +195,10 @@ class Gallery(SQLModel, table=True):
         default_factory=datetime.now,
         sa_column=Column(DateTime(timezone=True), onupdate=func.now()),
     )  # pylint: disable=not-callable
-    user_id: Optional[str] = None
+    user_id: Optional[str] = Field(
+        default=None,
+        sa_column=Column(String, ForeignKey("user.id", ondelete="CASCADE")),
+    )
     version: Optional[str] = "0.0.1"
     config: Union[GalleryConfig, dict[str, Any]] = Field(
         default_factory=lambda: GalleryConfig(
@@ -192,7 +228,11 @@ class Settings(SQLModel, table=True):
         default_factory=datetime.now,
         sa_column=Column(DateTime(timezone=True), onupdate=func.now()),
     )  # pylint: disable=not-callable
-    user_id: Optional[str] = Field(default=None, unique=True)
+    user_id: Optional[str] = Field(
+        default=None,
+        sa_column=Column(String, ForeignKey("user.id", ondelete="CASCADE")),
+        unique=True,
+    )
     version: Optional[str] = "0.0.1"
     config: Union[SettingsConfig, dict[str, Any]] = Field(
         default_factory=lambda: SettingsConfig().model_dump(), sa_column=Column(JSON)
@@ -217,7 +257,10 @@ class Plan(SQLModel, table=True):
         default_factory=datetime.now,
         sa_column=Column(DateTime(timezone=True), onupdate=func.now()),
     )  # pylint: disable=not-callable
-    user_id: Optional[str] = None
+    user_id: Optional[str] = Field(
+        default=None,
+        sa_column=Column(String, ForeignKey("user.id", ondelete="CASCADE")),
+    )
     version: Optional[str] = "0.0.1"
     task: Optional[str] = None
     steps: Optional[List[dict[str, Any]]] = Field(
@@ -231,4 +274,4 @@ class Plan(SQLModel, table=True):
             return value.isoformat()
 
 
-DatabaseModel = Team | Message | Session | Run | Gallery | Settings | Plan
+DatabaseModel = User | Team | Message | Session | Run | Gallery | Settings | Plan

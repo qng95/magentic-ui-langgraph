@@ -56,6 +56,7 @@ class TeamManager:
         run_without_docker: bool,
         inside_docker: bool = True,
         config: dict[str, Any] = {},
+        user_id: str | None = None,
     ) -> None:
         self.team: Team | None = None
         self.load_from_config = False
@@ -64,6 +65,7 @@ class TeamManager:
         self.inside_docker = inside_docker
         self.run_without_docker = run_without_docker
         self.config = config
+        self.user_id = user_id
         # Track uploaded files across the entire conversation
         self.uploaded_files: set[str] = set()
 

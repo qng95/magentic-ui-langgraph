@@ -70,7 +70,8 @@ class WebSocketManager:
         # Track explicitly closed connections
         self._closed_connections: set[int] = set()
         self._input_responses: Dict[int, asyncio.Queue[str]] = {}
-        self._team_managers: Dict[int, TeamManager] = {}
+        self._team_managers: Dict[str, TeamManager] = {}
+        self._run_users: Dict[int, str] = {}
         self._cancel_message = TeamResult(
             task_result=TaskResult(
                 messages=[TextMessage(source="user", content="Run cancelled by user")],
@@ -112,6 +113,12 @@ class WebSocketManager:
             logger.error(f"Connection error for run {run_id}: {e}")
             return False
 
+    async def _cleanup_team_manager(self, user_id: str | None) -> None:
+        if user_id and user_id not in self._run_users.values():
+            team_manager = self._team_managers.pop(user_id, None)
+            if team_manager:
+                await team_manager.close()
+
     async def start_stream(
         self,
         run_id: int,
@@ -133,19 +140,29 @@ class WebSocketManager:
         if run_id not in self._connections or run_id in self._closed_connections:
             raise ValueError(f"No active connection for run {run_id}")
 
-        # do not create a new team manager if one already exists
-        if run_id not in self._team_managers:
+        run = await self._get_run(run_id)
+        if run is None:
+            raise ValueError(f"Run {run_id} not found")
+
+        assert run is not None, "Run must be loaded before starting stream"
+        assert run.user_id is not None, "Run must have a user_id"
+
+        self._run_users[run_id] = run.user_id
+
+        # Create or reuse a team manager per user to ensure per-user isolation
+        if run.user_id not in self._team_managers:
             team_manager = TeamManager(
                 internal_workspace_root=self.internal_workspace_root,
                 external_workspace_root=self.external_workspace_root,
                 inside_docker=self.inside_docker,
                 config=self.config,
                 run_without_docker=self.run_without_docker,
+                user_id=run.user_id,
             )
-            self._team_managers[run_id] = team_manager
+            self._team_managers[run.user_id] = team_manager
 
         else:
-            team_manager = self._team_managers[run_id]
+            team_manager = self._team_managers[run.user_id]
         cancellation_token = CancellationToken()
         self._cancellation_tokens[run_id] = cancellation_token
         final_result = None
@@ -254,7 +271,6 @@ class WebSocketManager:
                     # Capture final result if it's a TeamResult
                     elif isinstance(message, TeamResult):
                         final_result = message.model_dump()
-                    self._team_managers[run_id] = team_manager  # Track the team manager
             if (
                 not cancellation_token.is_cancelled()
                 and run_id not in self._closed_connections
@@ -289,7 +305,9 @@ class WebSocketManager:
             await self._handle_stream_error(run_id, e)
         finally:
             self._cancellation_tokens.pop(run_id, None)
-            self._team_managers.pop(run_id, None)  # Remove the team manager when done
+            user_id = self._run_users.pop(run_id, None)
+            if user_id:
+                await self._cleanup_team_manager(user_id)
 
     async def _save_message(
         self, run_id: int, message: Union[AgentEvent | ChatMessage, LLMCallEventMessage]
@@ -462,10 +480,9 @@ class WebSocketManager:
 
                 # Finally cancel the token
                 self._cancellation_tokens[run_id].cancel()
-                # remove team manager
-                team_manager = self._team_managers.pop(run_id, None)
-                if team_manager:
-                    await team_manager.close()
+                # Track run teardown
+                user_id = self._run_users.pop(run_id, None)
+                await self._cleanup_team_manager(user_id)
             except Exception as e:
                 logger.error(f"Error stopping run {run_id}: {e}")
                 # We might want to force disconnect here if db update failed
@@ -715,6 +732,13 @@ class WebSocketManager:
             self._cancellation_tokens.clear()
             self._closed_connections.clear()
             self._input_responses.clear()
+            for user_id, team_manager in list(self._team_managers.items()):
+                try:
+                    await team_manager.close()
+                except Exception as e:
+                    logger.error(f"Error closing team manager for {user_id}: {e}")
+            self._team_managers.clear()
+            self._run_users.clear()
 
     @property
     def active_connections(self) -> set[int]:
@@ -731,9 +755,10 @@ class WebSocketManager:
         if (
             run_id in self._connections
             and run_id not in self._closed_connections
-            and run_id in self._team_managers
+            and run_id in self._run_users
         ):
-            team_manager = self._team_managers.get(run_id)
+            user_id = self._run_users.get(run_id)
+            team_manager = self._team_managers.get(user_id) if user_id else None
             if team_manager:
                 await team_manager.pause_run()
                 # await self._send_message(
@@ -751,9 +776,10 @@ class WebSocketManager:
         if (
             run_id in self._connections
             and run_id not in self._closed_connections
-            and run_id in self._team_managers
+            and run_id in self._run_users
         ):
-            team_manager = self._team_managers.get(run_id)
+            user_id = self._run_users.get(run_id)
+            team_manager = self._team_managers.get(user_id) if user_id else None
             if team_manager:
                 await team_manager.resume_run()
                 await self._update_run_status(run_id, RunStatus.ACTIVE)
