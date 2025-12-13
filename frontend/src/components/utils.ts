@@ -2,8 +2,15 @@ import { RcFile } from "antd/es/upload";
 import { IStatus } from "./types/app";
 
 export const getServerUrl = () => {
-  return process.env.GATSBY_API_URL || "/api";
+  return (
+    process.env.GATSBY_LANGGRAPH_API_URL ||
+    process.env.GATSBY_API_URL ||
+    "/api"
+  );
 };
+
+export const isLangGraphApi = () =>
+  Boolean(process.env.GATSBY_LANGGRAPH_API_URL);
 
 export function setCookie(name: string, value: any, days: number) {
   let expires = "";

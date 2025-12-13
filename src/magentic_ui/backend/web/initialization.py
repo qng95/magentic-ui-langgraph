@@ -48,7 +48,9 @@ class AppInitializer:
         """Generate database URI based on settings or environment"""
         if db_uri := os.getenv("DATABASE_URI"):
             return db_uri
-        return self.settings.DATABASE_URI.replace("./", str(app_root) + "/")
+        if self.settings.DATABASE_URI.startswith("sqlite:///./"):
+            return self.settings.DATABASE_URI.replace("./", str(app_root) + "/")
+        return self.settings.DATABASE_URI
 
     def _init_paths(self) -> _AppPaths:
         """Initialize and return AppPaths instance"""

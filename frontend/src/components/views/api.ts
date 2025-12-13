@@ -1,7 +1,9 @@
-import { Session, SessionRuns } from "../types/datamodel";
-import { getServerUrl } from "../utils";
+import { Message, Run, Session, SessionRuns } from "../types/datamodel";
+import { getServerUrl, isLangGraphApi } from "../utils";
 import { Team, AgentConfig } from "../types/datamodel";
 export class SessionAPI {
+  private isLangGraph = isLangGraphApi();
+
   private getBaseUrl(): string {
     return getServerUrl();
   }
@@ -12,7 +14,62 @@ export class SessionAPI {
     };
   }
 
+  private mapLangGraphSession(raw: any): Session {
+    const id = raw?.session_id ?? raw?.id;
+    const name =
+      raw?.metadata?.name ||
+      raw?.name ||
+      (typeof id !== "undefined" ? `Session ${id}` : "Session");
+
+    return {
+      id,
+      name,
+      created_at: raw?.created_at,
+      updated_at: raw?.updated_at,
+    } as Session;
+  }
+
+  private mapLangGraphMessage(
+    raw: any,
+    sessionId: number | string
+  ): Message {
+    const content =
+      typeof raw?.content === "string"
+        ? raw.content
+        : JSON.stringify(raw?.content ?? "");
+
+    return {
+      id: raw?.id ?? raw?.message_id,
+      session_id: sessionId as number,
+      run_id: (raw?.run_id ?? sessionId ?? "").toString(),
+      created_at: raw?.created_at,
+      updated_at: raw?.updated_at,
+      config: {
+        source: raw?.role ?? raw?.sender ?? "assistant",
+        content,
+      },
+    } as Message;
+  }
+
+  private async handleLangGraphResponse(response: Response): Promise<any> {
+    const data = await response.json();
+    if (!response.ok) {
+      const message = data?.message || response.statusText;
+      throw new Error(message);
+    }
+    return data;
+  }
+
   async listSessions(userId: string): Promise<Session[]> {
+    if (this.isLangGraph) {
+      const response = await fetch(`${this.getBaseUrl()}/sessions`, {
+        headers: this.getHeaders(),
+      });
+      const data = await this.handleLangGraphResponse(response);
+      const sessions = data?.data?.sessions ?? data?.sessions ?? data ?? [];
+      return (sessions as any[]).map((s) => this.mapLangGraphSession(s));
+    }
+
     const response = await fetch(
       `${this.getBaseUrl()}/sessions/?user_id=${userId}`,
       {
@@ -26,6 +83,19 @@ export class SessionAPI {
   }
 
   async getSession(sessionId: number, userId: string): Promise<Session> {
+    if (this.isLangGraph) {
+      const response = await fetch(
+        `${this.getBaseUrl()}/sessions/${sessionId}`,
+        {
+          headers: this.getHeaders(),
+        }
+      );
+      const data = await this.handleLangGraphResponse(response);
+      return this.mapLangGraphSession(
+        data?.data?.session ?? data?.session ?? data
+      );
+    }
+
     const response = await fetch(
       `${this.getBaseUrl()}/sessions/${sessionId}?user_id=${userId}`,
       {
@@ -42,6 +112,27 @@ export class SessionAPI {
     sessionData: Partial<Session>,
     userId: string
   ): Promise<Session> {
+    if (this.isLangGraph) {
+      const payload = {
+        metadata: { name: sessionData.name },
+      };
+      const response = await fetch(`${this.getBaseUrl()}/sessions`, {
+        method: "POST",
+        headers: this.getHeaders(),
+        body: JSON.stringify(payload),
+      });
+      const data = await this.handleLangGraphResponse(response);
+      const sessionId = data?.session_id ?? data?.data?.session_id ?? data?.id;
+      return {
+        id: sessionId,
+        name:
+          sessionData.name ||
+          data?.metadata?.name ||
+          data?.data?.metadata?.name ||
+          `Session ${sessionId}`,
+      } as Session;
+    }
+
     const session = {
       ...sessionData,
       user_id: userId, // Ensure user_id is included
@@ -63,6 +154,21 @@ export class SessionAPI {
     sessionData: Partial<Session>,
     userId: string
   ): Promise<Session> {
+    if (this.isLangGraph) {
+      const response = await fetch(
+        `${this.getBaseUrl()}/sessions/${sessionId}`,
+        {
+          method: "PATCH",
+          headers: this.getHeaders(),
+          body: JSON.stringify({ metadata: { name: sessionData.name } }),
+        }
+      );
+      const data = await this.handleLangGraphResponse(response);
+      return this.mapLangGraphSession(
+        data?.data?.session ?? data?.session ?? data
+      );
+    }
+
     const session = {
       ...sessionData,
       id: sessionId,
@@ -88,6 +194,34 @@ export class SessionAPI {
     sessionId: number,
     userId: string
   ): Promise<SessionRuns> {
+    if (this.isLangGraph) {
+      const response = await fetch(
+        `${this.getBaseUrl()}/sessions/${sessionId}/messages`,
+        {
+          headers: this.getHeaders(),
+        }
+      );
+      const data = await this.handleLangGraphResponse(response);
+      const rawMessages = data?.messages ?? data?.data?.messages ?? [];
+      const messages: Message[] = (rawMessages as any[]).map((m) =>
+        this.mapLangGraphMessage(m, sessionId)
+      );
+
+      const run: Run = {
+        id: sessionId.toString(),
+        created_at: messages[0]?.created_at || new Date().toISOString(),
+        status: "complete",
+        task: {
+          source: "user",
+          content: messages[0]?.config?.content ?? "",
+        },
+        team_result: null,
+        messages,
+      } as Run;
+
+      return { runs: [run] } as SessionRuns;
+    }
+
     const response = await fetch(
       `${this.getBaseUrl()}/sessions/${sessionId}/runs?user_id=${userId}`,
       {
@@ -101,6 +235,18 @@ export class SessionAPI {
   }
 
   async deleteSession(sessionId: number, userId: string): Promise<void> {
+    if (this.isLangGraph) {
+      const response = await fetch(
+        `${this.getBaseUrl()}/sessions/${sessionId}`,
+        {
+          method: "DELETE",
+          headers: this.getHeaders(),
+        }
+      );
+      await this.handleLangGraphResponse(response);
+      return;
+    }
+
     const response = await fetch(
       `${this.getBaseUrl()}/sessions/${sessionId}?user_id=${userId}`,
       {
@@ -115,6 +261,17 @@ export class SessionAPI {
 
   // Adding messages endpoint
   async listSessionMessages(sessionId: number, userId: string): Promise<any[]> {
+    if (this.isLangGraph) {
+      const response = await fetch(
+        `${this.getBaseUrl()}/sessions/${sessionId}/messages`,
+        {
+          headers: this.getHeaders(),
+        }
+      );
+      const data = await this.handleLangGraphResponse(response);
+      return data?.messages ?? data?.data?.messages ?? [];
+    }
+
     // Replace 'any' with proper message type
     const response = await fetch(
       `${this.getBaseUrl()}/sessions/${sessionId}/messages?user_id=${userId}`,

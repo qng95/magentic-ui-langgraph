@@ -22,7 +22,7 @@ class DatabaseManager:
         Does not perform any database operations.
 
         Args:
-            engine_uri (str): Database connection URI (e.g. sqlite:///db.sqlite3)
+            engine_uri (str): Database connection URI (e.g. postgresql+psycopg://user:pass@host:5432/dbname)
             base_dir (Path, optional): Base directory for migration files. If None, uses current directory. Default: None.
         """
         connection_args: Dict[str, Any] = (
