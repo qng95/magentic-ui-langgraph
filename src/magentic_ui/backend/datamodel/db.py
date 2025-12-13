@@ -21,7 +21,6 @@ from .types import (
 
 
 class User(SQLModel, table=True):
-    __table_args__ = {"sqlite_autoincrement": True}
     id: str = Field(primary_key=True)
     created_at: datetime = Field(
         sa_column=Column(DateTime(timezone=True), server_default=func.now()),
@@ -42,7 +41,6 @@ class User(SQLModel, table=True):
 
 
 class Team(SQLModel, table=True):
-    __table_args__ = {"sqlite_autoincrement": True}
     id: Optional[int] = Field(default=None, primary_key=True)
     created_at: datetime = Field(
         sa_column=Column(DateTime(timezone=True), server_default=func.now()),
@@ -60,7 +58,6 @@ class Team(SQLModel, table=True):
 
 
 class Message(SQLModel, table=True):
-    __table_args__ = {"sqlite_autoincrement": True}
     id: Optional[int] = Field(default=None, primary_key=True)
     created_at: datetime = Field(
         sa_column=Column(DateTime(timezone=True), server_default=func.now()),
@@ -92,7 +89,6 @@ class Message(SQLModel, table=True):
 
 
 class Session(SQLModel, table=True):
-    __table_args__ = {"sqlite_autoincrement": True}
     id: Optional[int] = Field(default=None, primary_key=True)
     created_at: datetime = Field(
         sa_column=Column(DateTime(timezone=True), server_default=func.now()),
@@ -133,8 +129,6 @@ class InputType(str, Enum):
 
 class Run(SQLModel, table=True):
     """Represents a single execution run within a session"""
-
-    __table_args__ = {"sqlite_autoincrement": True}
 
     id: Optional[int] = Field(default=None, primary_key=True)
     created_at: datetime = Field(
@@ -186,7 +180,6 @@ class Run(SQLModel, table=True):
 
 
 class Gallery(SQLModel, table=True):
-    __table_args__ = {"sqlite_autoincrement": True}
     id: Optional[int] = Field(default=None, primary_key=True)
     created_at: datetime = Field(
         sa_column=Column(DateTime(timezone=True), server_default=func.now()),
@@ -219,7 +212,6 @@ class Gallery(SQLModel, table=True):
 
 
 class Settings(SQLModel, table=True):
-    __table_args__ = {"sqlite_autoincrement": True}
     id: Optional[int] = Field(default=None, primary_key=True)
     created_at: datetime = Field(
         sa_column=Column(DateTime(timezone=True), server_default=func.now()),
@@ -248,7 +240,6 @@ class Settings(SQLModel, table=True):
 
 
 class Plan(SQLModel, table=True):
-    __table_args__ = {"sqlite_autoincrement": True}
     id: Optional[int] = Field(default=None, primary_key=True)
     created_at: datetime = Field(
         sa_column=Column(DateTime(timezone=True), server_default=func.now()),

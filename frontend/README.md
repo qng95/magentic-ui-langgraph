@@ -29,4 +29,4 @@ the front end makes request to the backend api and expects it at `http://localho
 - please look at `.env.default`
 - make a copy of this file and name it `.env.development`
 - set the values for the variables in this file
-  - The main variable here is `GATSBY_API_URL` which should be set to `http://localhost:8081/api` for local development. This tells the UI where to make requests to the backend.
+- The main variable here is `GATSBY_LANGGRAPH_API_URL` which should be set to `http://localhost:8081/api` for local development. This tells the UI where to make requests to the backend.
